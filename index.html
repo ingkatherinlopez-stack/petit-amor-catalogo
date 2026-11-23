@@ -56,10 +56,25 @@ function failInventory(){
 }
 function loadInventory(){
   const script=document.createElement('script');
-  const timer=setTimeout(()=>{if(!inventoryReady)failInventory()},12000);
-  window.petitAmorInventoryCallback=function(data){clearTimeout(timer);try{applyInventory(data)}catch(e){failInventory()}finally{script.remove()}};
-  script.onerror=function(){clearTimeout(timer);failInventory();script.remove()};
-  script.src=INVENTORY_ENDPOINT+'?mode=inventory&callback=petitAmorInventoryCallback';
+  let completed=false;
+  const finish=()=>{if(completed)return;completed=true;clearTimeout(timer);script.remove();};
+  const timer=setTimeout(()=>{
+    if(!inventoryReady){finish();failInventory();}
+  },30000);
+  window.petitAmorInventoryCallback=function(data){
+    if(completed)return;
+    try{applyInventory(data);}
+    catch(e){failInventory();}
+    finally{finish();}
+  };
+  script.onerror=function(){
+    if(completed)return;
+    finish();
+    failInventory();
+  };
+  // Evita que Safari reutilice una respuesta JSONP antigua desde caché.
+  const separator=INVENTORY_ENDPOINT.includes('?')?'&':'?';
+  script.src=INVENTORY_ENDPOINT+separator+'mode=inventory&callback=petitAmorInventoryCallback&_='+Date.now();
   document.head.appendChild(script);
 }
 function isSoldOut(p){return p.status==='Agotado'}
