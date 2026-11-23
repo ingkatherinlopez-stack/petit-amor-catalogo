@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prueba de conexión · Petit Amor</title>
+<style>
+  body { margin:0; padding:24px; font-family:Arial,sans-serif; background:#fbf7f0; color:#654b3d; }
+  main { max-width:680px; margin:24px auto; background:white; border:1px solid #e4d7c9; border-radius:14px; padding:22px; }
+  h1 { font-family:Georgia,serif; margin-top:0; }
+  #status { padding:14px; border-radius:9px; background:#f4eee7; line-height:1.5; overflow-wrap:anywhere; }
+  button { margin-top:16px; padding:12px 18px; border:0; border-radius:24px; background:#238a5b; color:white; font-size:16px; }
+  pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; background:#f7f4ef; padding:12px; border-radius:8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>♡ Petit Amor</h1>
+  <h2>Prueba independiente del inventario</h2>
+  <p>Esta página prueba la misma conexión de inventario, sin cargar el catálogo ni sus funciones.</p>
+  <div id="status" role="status">Preparando prueba…</div>
+  <button type="button" onclick="runTest()">Repetir prueba</button>
+  <h3>Resultado técnico</h3>
+  <pre id="details">Esperando respuesta…</pre>
+</main>
+<script>
+const INVENTORY_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyOmv-jR9jaS_xiGWLar2_CElMVGMad93G2J195fw8oyZk8Ng0wFJBRL3D3n8dRZNh8/exec';
+let activeScript = null;
+let activeTimer = null;
+
+function show(message, details) {
+  document.getElementById('status').textContent = message;
+  document.getElementById('details').textContent = details || '';
+}
+
+function runTest() {
+  if (activeScript) activeScript.remove();
+  if (activeTimer) clearTimeout(activeTimer);
+
+  const started = Date.now();
+  const callbackName = 'petitAmorInventoryCallback';
+  window[callbackName] = function(data) {
+    if (activeTimer) clearTimeout(activeTimer);
+    const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+    if (data && data.ok === true && Array.isArray(data.inventory)) {
+      show('CONEXIÓN EXITOSA. Safari recibió el inventario.', 
+        'Tiempo: ' + elapsed + ' segundos\\nRegistros recibidos: ' + data.inventory.length +
+        '\\nRespuesta: ok=true\\nEste resultado prueba el servicio y la carga JSONP de forma aislada.');
+    } else {
+      show('La respuesta llegó, pero tiene un formato inesperado.',
+        'Tiempo: ' + elapsed + ' segundos\\n' + JSON.stringify(data).slice(0, 2500));
+    }
+    if (activeScript) activeScript.remove();
+  };
+
+  activeScript = document.createElement('script');
+  activeScript.async = true;
+  activeScript.onerror = function() {
+    if (activeTimer) clearTimeout(activeTimer);
+    show('ERROR DE CARGA: Safari no pudo ejecutar el recurso de Apps Script.',
+      'Evento: script.onerror\\nTiempo: ' + ((Date.now() - started) / 1000).toFixed(1) + ' segundos');
+    activeScript.remove();
+  };
+  activeTimer = setTimeout(function() {
+    show('TIEMPO DE ESPERA AGOTADO: no llegó el callback.',
+      'No se recibió respuesta en 30 segundos.\\nLa página de prueba no carga ningún otro código del catálogo.');
+    if (activeScript) activeScript.remove();
+  }, 30000);
+
+  const separator = INVENTORY_ENDPOINT.includes('?') ? '&' : '?';
+  activeScript.src = INVENTORY_ENDPOINT + separator +
+    'mode=inventory&callback=' + callbackName + '&_=' + Date.now();
+  show('Consultando inventario…', 'Solicitando respuesta JSONP a Apps Script.');
+  document.head.appendChild(activeScript);
+}
+
+window.addEventListener('load', runTest);
+</script>
+</body>
+</html>
