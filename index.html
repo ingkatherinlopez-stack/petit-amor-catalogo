@@ -68,8 +68,9 @@ function loadInventory(){
   const fail=(reason)=>{if(completed)return;finish();failInventory(reason);};
   function onInventoryMessage(event){
     if(completed || event.source!==frame.contentWindow)return;
-    const origin=String(event.origin||'');
-    if(origin!=='https://script.google.com' && !/^https:\/\/[a-z0-9.-]+\.googleusercontent\.com$/i.test(origin))return;
+    // La comprobación de event.source asegura que el mensaje proviene
+    // del iframe creado para esta consulta. No fijamos event.origin porque
+    // Apps Script puede redirigir el documento a googleusercontent.com.
     const message=event.data;
     if(!message || message.type!=='PETIT_AMOR_INVENTORY')return;
     try{
