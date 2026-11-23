@@ -47,32 +47,53 @@ function applyInventory(data){
   if(label) label.textContent='Existencias actualizadas desde el inventario.';
   render();
 }
-function failInventory(){
+function failInventory(reason){
   inventoryReady=false; inventoryFailed=true;
   products.forEach(p=>{p.availableSizes=[];p.totalStock=0;p.status='No verificado'});
   const label=document.getElementById('inventory-status');
-  if(label) label.textContent='No pudimos verificar las existencias. Por seguridad, las consultas de pedido están temporalmente deshabilitadas.';
+  const detail=reason ? ' Diagnóstico: '+reason : '';
+  if(label) label.textContent='No pudimos verificar las existencias. Por seguridad, las consultas de pedido están temporalmente deshabilitadas.'+detail;
+  console.error('[Petit Amor inventario]', reason || 'Fallo sin detalle');
   render();
 }
 function loadInventory(){
   const script=document.createElement('script');
   let completed=false;
+  let callbackExecuted=false;
+  const label=document.getElementById('inventory-status');
+  if(label) label.textContent='Conectando con el inventario…';
   const finish=()=>{if(completed)return;completed=true;clearTimeout(timer);script.remove();};
   const timer=setTimeout(()=>{
-    if(!inventoryReady){finish();failInventory();}
+    if(!completed){finish();failInventory('La solicitud superó 30 segundos; el celular no recibió el callback.');}
   },30000);
   window.petitAmorInventoryCallback=function(data){
     if(completed)return;
-    try{applyInventory(data);}
-    catch(e){failInventory();}
-    finally{finish();}
+    callbackExecuted=true;
+    try{
+      if(!data || data.ok!==true || !Array.isArray(data.inventory)){
+        const serverMessage=data && data.message ? String(data.message) : 'La respuesta no contiene ok=true e inventory como arreglo.';
+        throw new Error(serverMessage);
+      }
+      applyInventory(data);
+      if(!inventoryReady) throw new Error('El procesamiento terminó sin marcar el inventario como listo.');
+    }catch(e){
+      failInventory('El callback sí se ejecutó, pero falló el procesamiento: '+(e && e.message ? e.message : String(e)));
+    }finally{finish();}
   };
   script.onerror=function(){
     if(completed)return;
     finish();
-    failInventory();
+    failInventory('El navegador bloqueó o no pudo cargar el archivo JavaScript del inventario (evento script.onerror).');
   };
-  // Evita que Safari reutilice una respuesta JSONP antigua desde caché.
+  script.onload=function(){
+    // Si el archivo cargó pero no llamó al callback, lo informamos de forma explícita.
+    setTimeout(()=>{
+      if(!completed && !callbackExecuted){
+        finish();
+        failInventory('El archivo del servidor cargó, pero no ejecutó petitAmorInventoryCallback.');
+      }
+    },150);
+  };
   const separator=INVENTORY_ENDPOINT.includes('?')?'&':'?';
   script.src=INVENTORY_ENDPOINT+separator+'mode=inventory&callback=petitAmorInventoryCallback&_='+Date.now();
   document.head.appendChild(script);
